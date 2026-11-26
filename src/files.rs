@@ -185,7 +185,7 @@ fn plan_of_remote(name: &str, kv: &Value, live: &Value) -> Result<(Plan, Option<
     // `config/get` 的答复就是参数本身；万一哪天套了一层 `params` 也认。
     let live = live
         .get("params")
-        .filter(Value::is_object)
+        .filter(|inner| inner.is_object())
         .unwrap_or(live)
         .clone();
     let live = if live.is_object() { Some(live) } else { None };
@@ -283,7 +283,8 @@ pub fn on_remote_list(id: u64, rq: &Rq) -> Value {
         return ask_page(id, state, &plan, &next);
     }
     let dir = plan.dir(&arg(rq, "path"));
-    let rows = list_folder(&entries, dir.as_str(), sort_of(rq), arg_flag(rq, "desc"));
+    let sort_key = sort_of(rq);
+    let rows = list_folder(&entries, dir.as_str(), &sort_key, arg_flag(rq, "desc"));
     done(id, json!({ "items": rows }))
 }
 
