@@ -11,6 +11,7 @@
 //! 每一轮都靠 `state` 把上一轮查到的东西带下来（见 proto.rs 的说明）。
 
 mod api;
+mod files;
 mod i18n;
 mod migrate;
 mod proto;
@@ -24,9 +25,11 @@ use serde_json::{json, Map, Value};
 use i18n::{f, t};
 use proto::*;
 
-/// 插件自己保存的那一格里放站点信息。令牌是明文——rclone 只肯把 bearer_token 交回
+/// 插件自己保存的那一格：站点信息。令牌是明文——rclone 只肯把 bearer_token 交回
 /// 一个 Obscured 串，插件拿不到原文，所以只能自己存一份，跟主程序旧的做法一致。
-const KEY: &str = "site";
+///
+/// `files` 也要读这一格（宿主按远程名来要文件时，没填令牌就回落这里），所以是 `pub(crate)`。
+pub(crate) const KEY: &str = "site";
 
 /// 新建远程时默认用的名字。
 const DEFAULT_NAME: &str = "k-vault";
@@ -198,6 +201,9 @@ fn dispatch(id: u64, params: &Value) -> Value {
         form: params.get("form").cloned().unwrap_or(Value::Null),
         provided: params.get("provided").cloned().unwrap_or(Value::Null),
         state: params.get("state").cloned().unwrap_or(Value::Null),
+        // 宿主按远程操作协议发来的那些（`remote`/`path`/`items`/`file_name`/`file_key`/
+        // `legacy`/`namespace`）就在 params 顶层，不在 form 里——form 是用户填的面板。
+        args: params.clone(),
     };
     let action = s(params.get("action"));
     match action.as_str() {
@@ -213,6 +219,13 @@ fn dispatch(id: u64, params: &Value) -> Value {
         "remove" => on_remove(id, &rq),
         "upload" => on_upload(id, &rq),
         "plan" => on_plan(id, &rq),
+        // 宿主按「这条远程由我负责」来要文件。和上面几个不同：这几个不看面板表单，
+        // 参数是宿主从文件管理器里带出来的（哪个远程、哪一层目录、用户点了什么）。
+        "remote.list" => files::on_remote_list(id, &rq),
+        "remote.upload" => files::on_remote_upload(id, &rq),
+        "remote.delete" => files::on_remote_delete(id, &rq),
+        // 宿主第一次启动新版主程序时，把旧版主程序替我们存的历史设置整份交过来。
+        "adopt_legacy" => files::on_adopt_legacy(id, &rq),
         other => fail(
             id,
             &f(

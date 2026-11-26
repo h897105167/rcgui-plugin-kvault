@@ -28,6 +28,8 @@
         "en": "K-Vault"
       },
       "base_type": "webdav",
+      "marker": "kvault",
+      "ops": ["remote.list", "remote.upload", "remote.delete"],
       "defaults": {
         "vendor": "other",
         "kvault": "1",
@@ -36,6 +38,7 @@
       }
     }
   ],
+  "adopt_legacy": ["kvault", "kvault_tokens"],
   "plugin_setting": {
     "version": 2,
     "summary": {

@@ -79,7 +79,13 @@
     "files.uploaded": "已上传 {0}（{1}）",
     "files.deduped": "站点认出去重，没存第二份",
     "files.plan_ok": "要发的请求都在下面的框里，什么都没发出去",
-    "files.plan_partial": "还差一点才能列出请求"
+    "files.plan_partial": "还差一点才能列出请求",
+    "files.name_ambiguous": "{0} 在站点里有 {1} 个同名文件，删哪个得你自己定：到站点网页端删",
+    "files.too_many": "一次最多删 {0} 项，超出的那些一项都没动",
+    "files.delete_no_reply": "站点没回话（连接断了或被拦了）",
+    "remote.no_base": "清单里没有 {0} 这一条，也没有它的历史记录：先扫描旧设置，或者把远程名留空用上面的站点",
+    "remote.no_token": "{0} 这条没有可用的令牌：先在上面的站点表单里填一个",
+    "legacy.bad": "旧设置的形状看不懂，一份都没动"
   },
   "en": {
     "plugin.name": "K-Vault",
@@ -161,6 +167,12 @@
     "files.uploaded": "Uploaded {0} ({1})",
     "files.deduped": "the site recognised a duplicate, so no second copy was stored",
     "files.plan_ok": "The requests to send are in the box below; nothing was sent",
-    "files.plan_partial": "Not enough to list the requests yet"
+    "files.plan_partial": "Not enough to list the requests yet",
+    "files.name_ambiguous": "{0} has {1} files with that name on the site; only you can tell which one: delete it on the site",
+    "files.too_many": "At most {0} items can be deleted at once; the rest were left untouched",
+    "files.delete_no_reply": "The site did not answer (connection dropped or blocked)",
+    "remote.no_base": "There is no record named {0} and no history for it: scan old settings first, or leave the remote name empty to use the site above",
+    "remote.no_token": "The record {0} has no usable token; fill one in the site form above",
+    "legacy.bad": "The old settings have a shape I cannot read, so nothing was touched"
   }
 }
