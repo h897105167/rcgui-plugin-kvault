@@ -18,7 +18,7 @@
     "en": ["k-vault", "webdav", "remote", "image host"]
   },
   "capabilities": ["kv", "ui", "http", "rclone"],
-  "min_gui_version": "0.3.0",
+  "min_gui_version": "0.3.1",
   "platform": "any",
   "remote_types": [
     {

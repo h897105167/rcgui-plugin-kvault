@@ -1782,7 +1782,7 @@ mod tests {
         );
     }
 
-    /// 宿主只认能力表里列出的名字，多写一个就整份配置被拒；面板分页要 0.3.0 起的宿主。
+    /// 宿主只认能力表里列出的名字，多写一个就整份配置被拒；面板分页要 0.3.1 起的宿主。
     /// remote_types 是元数据，不是能力。
     #[test]
     fn the_config_declares_pages_and_metadata_correctly() {
@@ -1796,10 +1796,12 @@ mod tests {
             !caps.iter().any(|c| c == "remote_types"),
             "remote_types 不是能力，宿主会拒绝整份配置"
         );
+        // 0.3.0 从未发布，而 remote_types 的 marker/ops 与 remote.* 动作只有本轮宿主才有：
+        // 门槛写 0.3.0 会让一个仍标着 0.3.0 的旧构建把包装进来，再在第一次列目录时失败。
         assert_eq!(
             cfg.get("min_gui_version").and_then(Value::as_str),
-            Some("0.3.0"),
-            "面板分页从 0.3.0 起支持"
+            Some("0.3.1"),
+            "面板分页与 remote.* 从 0.3.1 起支持"
         );
         let kind = cfg
             .get("remote_types")

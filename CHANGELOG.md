@@ -14,9 +14,19 @@ cargo check --target wasm32-wasip1
 pwsh -File scripts/pack.ps1   # 出 dist/kvault-0.3.0.zip 并算 sha256
 ```
 
+### 版本门槛：`min_gui_version` 提到 0.3.1
+
+主程序这一批的版本号从 0.3.0 改成 0.3.1（0.3.0 从未打过 tag、从未发布）。`remote_types` 的
+`marker`/`ops` 与 `remote.list`/`remote.upload`/`remote.delete` 三个动作都是这一批新宿主才有的，
+所以 `config.json` 的门槛同步提到 `0.3.1`：仍标着 0.3.0 的旧构建在商店安装与本地包加载两处都会
+明确拒绝并提示先升级本程序，而不是把包装进来、等第一次列目录时才失败。
+
+插件自身版本仍是 0.3.0（`Cargo.toml` 与 `config.json` 保持一致，CI 会核对）。`config.json` 由
+`include_str!` 编进 wasm，改完必须重新打包，否则包里内嵌的还是旧门槛。
+
 ### 站点接口从主程序搬到插件（`src/api.rs`）
 
-照 `crates/app/src/kvault.rs` 逐字段对齐，所以新旧远程在站点上看不出区别：
+照主程序原来的 K-Vault 模块逐字段对齐（那份代码已随插件化从主程序删除），所以新旧远程在站点上看不出区别：
 
 - 列表 `GET <base>/api/v1/files?limit=200[&cursor=…]`，带 `Authorization: Bearer …`，按 `pagination.listComplete` 停，最多 5 页（主程序 25 页，插件受 16 轮上限约束取 5 页，多的分次列）。
 - 删除 `DELETE <base>/api/v1/file/<encode_id(id)>`。`encode_id` 保留字母数字与 `-_.~:/`，其余按 `%XX` 转义；`:` 必须留着，站点拿整个字符串当主键。

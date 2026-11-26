@@ -30,7 +30,7 @@ bearer_token = kvault_xxx_yyy
 2. 解到 `<RCGUI 数据目录>/plugins/kvault/`，目录里应当有 `config.json`、`main.wasm`、`check.sha256`。
 3. 在插件页启用。启用后「新建远程」的类型下拉里才会多出 K-Vault 这一项。
 
-宿主需要 0.3.0 及以上（`config.json` 的 `min_gui_version` 写的就是这个）：从这一版起，插件才能声明 `remote_types` 元数据、也才能用面板分页。旧宿主会忽略 `remote_types`，插件能装、能打开，但下拉里不会出现 K-Vault。
+宿主需要 0.3.1 及以上（`config.json` 的 `min_gui_version` 写的就是这个）：从这一版起，插件才能声明 `remote_types` 元数据（含 `marker`/`ops`）、用面板分页，宿主也才会把 `remote.list`/`remote.upload`/`remote.delete` 路由过来。仍标着 0.3.0 的旧构建会在安装时被挡下并提示先升级本程序——0.3.0 从未发布，它没有这套协议。
 
 **插件没装或没启用时，主程序里不该有任何东西被当成 K-Vault**：远程类型只从 rclone 自己认的后端和启用的插件里来，`kvault = 1` 这个标记也只有这里在写。
 
