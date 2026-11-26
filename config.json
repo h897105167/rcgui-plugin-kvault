@@ -1,0 +1,331 @@
+{
+  "id": "kvault",
+  "name": {
+    "zh": "K-Vault 远程",
+    "en": "K-Vault remote"
+  },
+  "version": "0.1.0",
+  "entry": "main.wasm",
+  "description": {
+    "zh": "连一个 K-Vault 站点，测通后建一个 webdav 类型的 rclone 远程，带 kvault 参数。上传仍由主程序负责。",
+    "en": "Connect to a K-Vault site, test it, then create a webdav rclone remote carrying the kvault parameters. Uploading stays in the main app."
+  },
+  "author": {
+    "zh": "RCGUI"
+  },
+  "tags": {
+    "zh": ["k-vault", "webdav", "远程", "图床"],
+    "en": ["k-vault", "webdav", "remote", "image host"]
+  },
+  "capabilities": ["kv", "ui", "http", "rclone"],
+  "min_gui_version": "0.3.0",
+  "platform": "any",
+  "remote_types": [
+    {
+      "id": "kvault",
+      "name": {
+        "zh": "K-Vault",
+        "en": "K-Vault"
+      },
+      "base_type": "webdav",
+      "defaults": {
+        "vendor": "other",
+        "kvault": "1",
+        "kvault_storage": "telegram",
+        "kvault_dedup": "1"
+      }
+    }
+  ],
+  "plugin_setting": {
+    "version": 2,
+    "summary": {
+      "zh": "填站点地址和访问令牌，测通后建远程；建出来的远程类型是 webdav。",
+      "en": "Fill in the site address and an access token, test them, then create a remote. The remote's type is webdav."
+    },
+    "pages": [
+      {
+        "id": "connect",
+        "label": {
+          "zh": "连接",
+          "en": "Connect"
+        }
+      },
+      {
+        "id": "remote",
+        "label": {
+          "zh": "远程",
+          "en": "Remote"
+        }
+      },
+      {
+        "id": "about",
+        "label": {
+          "zh": "关于",
+          "en": "About"
+        }
+      }
+    ],
+    "controls": [
+      {
+        "kind": "status",
+        "key": "run",
+        "label": {
+          "zh": "当前状态",
+          "en": "Status"
+        },
+        "lamp": true
+      },
+      {
+        "kind": "checks",
+        "key": "checks",
+        "label": {
+          "zh": "检查项",
+          "en": "Checks"
+        },
+        "text": {
+          "zh": "尚未检查",
+          "en": "Not checked yet"
+        }
+      },
+      {
+        "kind": "group",
+        "key": "g_connect",
+        "label": {
+          "zh": "站点地址与令牌",
+          "en": "Site address and token"
+        },
+        "page": "connect"
+      },
+      {
+        "kind": "field",
+        "key": "base",
+        "label": {
+          "zh": "站点地址",
+          "en": "Site address"
+        },
+        "field": "text",
+        "placeholder": {
+          "zh": "https://kv.example.com",
+          "en": "https://kv.example.com"
+        },
+        "page": "connect"
+      },
+      {
+        "kind": "field",
+        "key": "token",
+        "label": {
+          "zh": "访问令牌",
+          "en": "Access token"
+        },
+        "field": "password",
+        "placeholder": {
+          "zh": "kvault_ 开头的令牌，留空只用账号密码访问 DAV",
+          "en": "token starting with kvault_; leave empty to use basic-auth DAV only"
+        },
+        "page": "connect"
+      },
+      {
+        "kind": "hint",
+        "key": "hint_site",
+        "label": {
+          "zh": "说明",
+          "en": "Note"
+        },
+        "text": {
+          "zh": "地址填站点根地址就行，别自己加 /dav，插件会补。令牌存在本机插件目录，和其它插件的令牌一样是明文的。",
+          "en": "Give the site root, not a /dav URL — the plugin appends that itself. The token is stored in this machine's plugin folder, in plain text like every other plugin secret here."
+        },
+        "page": "connect"
+      },
+      {
+        "kind": "action",
+        "key": "test",
+        "label": {
+          "zh": "测试连接",
+          "en": "Test connection"
+        },
+        "style": "primary",
+        "line": "connect-actions",
+        "page": "connect"
+      },
+      {
+        "kind": "group",
+        "key": "g_remote",
+        "label": {
+          "zh": "远程参数",
+          "en": "Remote settings"
+        },
+        "page": "remote"
+      },
+      {
+        "kind": "field",
+        "key": "name",
+        "label": {
+          "zh": "远程名",
+          "en": "Remote name"
+        },
+        "field": "text",
+        "default": "k-vault",
+        "placeholder": {
+          "zh": "k-vault",
+          "en": "k-vault"
+        },
+        "page": "remote"
+      },
+      {
+        "kind": "field",
+        "key": "folder",
+        "label": {
+          "zh": "存放目录",
+          "en": "Folder"
+        },
+        "field": "text",
+        "placeholder": {
+          "zh": "留空表示根目录",
+          "en": "empty means the root"
+        },
+        "page": "remote"
+      },
+      {
+        "kind": "field",
+        "key": "storage",
+        "label": {
+          "zh": "存储后端",
+          "en": "Storage"
+        },
+        "field": "select",
+        "default": "telegram",
+        "options": [
+          {
+            "value": "telegram",
+            "label": {
+              "zh": "Telegram",
+              "en": "Telegram"
+            }
+          },
+          {
+            "value": "r2",
+            "label": {
+              "zh": "Cloudflare R2",
+              "en": "Cloudflare R2"
+            }
+          },
+          {
+            "value": "s3",
+            "label": {
+              "zh": "S3",
+              "en": "S3"
+            }
+          },
+          {
+            "value": "discord",
+            "label": {
+              "zh": "Discord",
+              "en": "Discord"
+            }
+          },
+          {
+            "value": "huggingface",
+            "label": {
+              "zh": "Hugging Face",
+              "en": "Hugging Face"
+            }
+          },
+          {
+            "value": "webdav",
+            "label": {
+              "zh": "WebDAV",
+              "en": "WebDAV"
+            }
+          },
+          {
+            "value": "github",
+            "label": {
+              "zh": "GitHub",
+              "en": "GitHub"
+            }
+          }
+        ],
+        "page": "remote"
+      },
+      {
+        "kind": "field",
+        "key": "dedup",
+        "label": {
+          "zh": "相同内容只存一份",
+          "en": "De-duplicate identical files"
+        },
+        "field": "bool",
+        "default": "true",
+        "page": "remote"
+      },
+      {
+        "kind": "hint",
+        "key": "hint_remote",
+        "label": {
+          "zh": "关于这个远程",
+          "en": "About this remote"
+        },
+        "text": {
+          "zh": "建出来的远程在 rclone 里是 webdav——K-Vault 本来就走 WebDAV，只是多了 kvault 几个参数。插件先问 rclone 有没有 webdav 后端，没有就停下来说明，不会硬建一个用不了的远程。",
+          "en": "In rclone the remote you get is webdav — K-Vault speaks WebDAV and only adds a few kvault parameters. The plugin first asks rclone whether it has the webdav backend and stops with an explanation instead of creating a remote that cannot work."
+        },
+        "page": "remote"
+      },
+      {
+        "kind": "action",
+        "key": "create",
+        "label": {
+          "zh": "创建远程",
+          "en": "Create remote"
+        },
+        "style": "primary",
+        "line": "remote-actions",
+        "page": "remote"
+      },
+      {
+        "kind": "group",
+        "key": "g_about",
+        "label": {
+          "zh": "关于这个插件",
+          "en": "About this plugin"
+        },
+        "page": "about"
+      },
+      {
+        "kind": "field",
+        "key": "dav_url",
+        "label": {
+          "zh": "DAV 地址",
+          "en": "DAV URL"
+        },
+        "field": "text",
+        "enabled": false,
+        "page": "about"
+      },
+      {
+        "kind": "action",
+        "key": "copy_dav",
+        "label": {
+          "zh": "复制 DAV 地址",
+          "en": "Copy DAV URL"
+        },
+        "line": "about-actions",
+        "page": "about"
+      },
+      {
+        "kind": "hint",
+        "key": "hint_upload",
+        "label": {
+          "zh": "上传由主程序负责",
+          "en": "Uploads are the main app's job"
+        },
+        "text": {
+          "zh": "上传不能放进插件：站点的上传接口要发文件，插件只能发文本请求。所以上传、列表、删除仍在主程序里——远程建好后，主程序按 kvault 参数走站点自己的接口。插件只负责地址、令牌和远程参数这三件事。",
+          "en": "Uploading cannot live in a plugin: the site's upload endpoint needs a file body, and a plugin can only send text requests. Upload, listing and delete therefore stay in the main app, which reads the kvault parameters from the remote. This plugin only handles the address, the token and the remote parameters."
+        },
+        "page": "about"
+      }
+    ]
+  }
+}
