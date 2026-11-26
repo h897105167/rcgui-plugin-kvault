@@ -79,12 +79,24 @@ jobs:
           if dup:
               errors.append(f"控件 key 重复: {dup}")
 
+          # capabilities 只能写宿主真会执行的能力组。宿主只认下面这八个名字，
+          # 多一个就整份 config.json 被拒，插件加载不起来。
+          cap_groups = ("kv", "ui", "fs", "http", "proc", "net", "rclone", "env")
+          caps = cfg.get("capabilities", [])
+          for cap in caps:
+              # remote_types 是元数据：它描述"新建远程时多给一个预设类型"，
+              # 描述不了插件能调用的操作，所以不该、也不能写进 capabilities。
+              if cap == "remote_types":
+                  errors.append("capabilities 里有 remote_types：它是元数据，不是能力组")
+              elif cap not in cap_groups:
+                  errors.append(f"capabilities 里有宿主不认识的能力组: {cap}（可用：{' / '.join(cap_groups)}）")
+          if len(set(caps)) != len(caps):
+              errors.append(f"capabilities 有重复项: {caps}")
+
           # 这里声明的派生类型是"预设一组参数"，不是新的 rclone 后端：
           # base_type 决定真正写进 rclone.conf 的 type，defaults 里不能再写 type。
           rts = cfg.get("remote_types", [])
           if rts:
-              if "remote_types" not in cfg.get("capabilities", []):
-                  errors.append("声明了 remote_types 却没申请 remote_types 能力")
               ids = [rt.get("id", "") for rt in rts]
               if len(set(ids)) != len(ids):
                   errors.append(f"remote_types id 重复: {ids}")
