@@ -107,6 +107,10 @@ fn resolve(id: u64, rq: &Rq) -> Step {
                 };
             }
             let state = keep(rq.state.clone(), "kv", kv);
+            // 必须把 step 推到 cfg。宿主每轮只带回这一轮问到的答案（provided 整体替换），
+            // 下一轮如果还停在 kv 这一支，`provided.kv` 里只有 cfg、读出来是空，
+            // 于是又去要 config/get——kv→cfg→kv 一直转到轮数用尽，谁也拿不到结果。
+            let state = keep(state, "step", json!(STEP_CFG));
             Step::Reply(need(
                 id,
                 state,
@@ -124,7 +128,10 @@ fn resolve(id: u64, rq: &Rq) -> Step {
             match plan_of_remote(&name, &kv, &live) {
                 Ok((plan, None)) => Step::Ready(plan),
                 Ok((plan, Some(secret))) => {
+                    // 同一类错误：不解密这一轮就算过了 cfg，下一轮 provided 里只剩 rvl，
+                    // `live` 变空 → 又算一遍 → 又要 rvl，永远停在 cfg。step 必须推进。
                     let state = keep(rq.state.clone(), "plan", plan.to_value());
+                    let state = keep(state, "step", json!(STEP_REVEAL));
                     Step::Reply(need(
                         id,
                         state,
