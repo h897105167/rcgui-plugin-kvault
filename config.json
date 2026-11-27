@@ -4,7 +4,7 @@
     "zh": "K-Vault 远程",
     "en": "K-Vault remote"
   },
-  "version": "0.3.0",
+  "version": "0.3.1",
   "entry": "main.wasm",
   "description": {
     "zh": "连一个 K-Vault 站点，建 webdav 远程，并在插件里列目录、删文件、上传。站点地址与接口都在这边，主程序只负责把用户选中的那个文件流出去。",
@@ -18,7 +18,7 @@
     "en": ["k-vault", "webdav", "remote", "image host"]
   },
   "capabilities": ["kv", "ui", "http", "rclone"],
-  "min_gui_version": "0.3.1",
+  "min_gui_version": "0.3.2",
   "platform": "any",
   "remote_types": [
     {
