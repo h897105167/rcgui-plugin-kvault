@@ -24,13 +24,13 @@ bearer_token = kvault_xxx_yyy
 
 ## 装载
 
-0.3.0 **还没有发布**：没有 tag，Release 里也没有这个 zip。下面这条是发版之后的路径，现在想试就先在本地打包（见「开发」）。
+0.3.1 **还没有发布**：没有 tag，Release 里也没有这个 zip。下面这条是发版之后的路径，现在想试就先在本地打包（见「开发」）。
 
-1. 从 Release 下 `kvault-0.3.0.zip`（正文里有这个 zip 的 sha256，可自行核对）。
+1. 从 Release 下 `kvault-0.3.1.zip`（正文里有这个 zip 的 sha256，可自行核对）。
 2. 解到 `<RCGUI 数据目录>/plugins/kvault/`，目录里应当有 `config.json`、`main.wasm`、`check.sha256`。
 3. 在插件页启用。启用后「新建远程」的类型下拉里才会多出 K-Vault 这一项。
 
-宿主需要 0.3.1 及以上（`config.json` 的 `min_gui_version` 写的就是这个）：从这一版起，插件才能声明 `remote_types` 元数据（含 `marker`/`ops`）、用面板分页，宿主也才会把 `remote.list`/`remote.upload`/`remote.delete` 路由过来。仍标着 0.3.0 的旧构建会在安装时被挡下并提示先升级本程序——0.3.0 从未发布，它没有这套协议。
+宿主需要 0.3.2 及以上（`config.json` 的 `min_gui_version` 写的就是这个）：面板分页与 `remote_types` 元数据从 0.3.1 起才有，而 0.3.2 起宿主才会在用户打字时重新问插件要状态。少了这一条，0.3.1 的宿主上「测试连接」按钮会一直是灰的——填了地址和令牌也不会变。仍标着 0.3.2 以下的旧构建会在安装时被挡下并提示先升级本程序。
 
 **插件没装或没启用时，主程序里不该有任何东西被当成 K-Vault**：远程类型只从 rclone 自己认的后端和启用的插件里来，`kvault = 1` 这个标记也只有这里在写。
 
@@ -142,7 +142,7 @@ pwsh -File scripts/pack.ps1            # Windows
 bash scripts/pack.sh                   # Linux / macOS / CI
 ```
 
-`cargo test` 现在是 65 条，分三类。
+`cargo test` 现在是 77 条，主要分三类（`src/site.rs`、`src/files.rs`、`src/migrate.rs` 的用例按同类归在这三组里）。
 
 一类只测纯函数（`src/api.rs`）：站点地址怎么拼、`id` 怎么转义（`:` 和 `/` 必须留着，站点拿整个字符串当主键）、分页怎么判完、错误信封怎么摊平成一句话、相对下载地址怎么补成整条、令牌怎么遮。
 
@@ -150,7 +150,7 @@ bash scripts/pack.sh                   # Linux / macOS / CI
 
 还有一类真的开 socket（`src/wire.rs`）：起一个本机 HTTP 服务，让插件通过真实的主机代理把请求发过去，断言服务端收到的那一行请求、认证头和翻页参数，断言删除请求的路径，以及上传时文件段的字节与字段顺序。禁用/卸载/迁移三条路也在这类里：没配置站点时一个请求都不发；清单里的旧记录能用旧令牌列出文件。
 
-产物在 `dist/kvault-0.3.0.zip`，打包时顺带算出它的 sha256。
+产物在 `dist/kvault-0.3.1.zip`，打包时顺带算出它的 sha256。
 
 ## 文件
 
