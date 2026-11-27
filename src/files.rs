@@ -48,13 +48,26 @@ impl Plan {
         }
     }
 
-    /// 界面要的目录：给了路径就用路径，没给就用这条远程自己的上传目录。
-    fn dir(&self, path: &str) -> String {
-        let path = path.trim().trim_matches('/');
+    /// 界面正在看的目录：空路径就是这条远程的根。
+    ///
+    /// 列目录和删除都用它。以前它们和上传共用同一个「空路径回退到上传目录」的
+    /// 规则，结果主程序的文件页顶部写着远程根（面包屑第一项就是远程名），列出来
+    /// 的却是上传目录那一层的内容 —— 位置显示和实际内容对不上。
+    fn browse_dir(&self, path: &str) -> String {
+        path.trim().trim_matches('/').to_string()
+    }
+
+    /// 上传该落在哪个目录：界面没给路径时，落在这条远程配好的目录（图床的
+    /// 「上传图片路径」，没配过就是站点给的默认值）。
+    ///
+    /// 只有上传走这个回退。选文件时界面不传路径，用户也不该被迫先切到某个目录
+    /// 才能传图；但列目录不能这么猜，见 [`Plan::browse_dir`]。
+    fn upload_dir(&self, path: &str) -> String {
+        let path = self.browse_dir(path);
         if path.is_empty() {
             self.folder.clone()
         } else {
-            path.to_string()
+            path
         }
     }
 }
@@ -289,7 +302,7 @@ pub fn on_remote_list(id: u64, rq: &Rq) -> Value {
         let state = page_state(rq.state.clone(), &plan, pages, &entries);
         return ask_page(id, state, &plan, &next);
     }
-    let dir = plan.dir(&arg(rq, "path"));
+    let dir = plan.browse_dir(&arg(rq, "path"));
     let sort_key = sort_of(rq);
     let rows = list_folder(&entries, dir.as_str(), &sort_key, arg_flag(rq, "desc"));
     done(id, json!({ "items": rows }))
@@ -442,7 +455,7 @@ pub fn on_remote_upload(id: u64, rq: &Rq) -> Value {
                 key
             }
         };
-        let folder = plan.dir(&arg(rq, "path"));
+        let folder = plan.upload_dir(&arg(rq, "path"));
         let mut request = api::upload_request(
             &plan.base,
             &plan.token,
@@ -522,7 +535,7 @@ fn more_or_plan(id: u64, rq: &Rq, plan: &Plan, page: api::Page) -> Value {
 
 /// 「目录 + 名字」→ 要到站点上删的东西，然后逐批发请求。
 fn plan_deletes(id: u64, rq: &Rq, plan: &Plan, entries: &[api::Entry]) -> Value {
-    let dir = plan.dir(&arg(rq, "path"));
+    let dir = plan.browse_dir(&arg(rq, "path"));
     let items = rq
         .args
         .get("items")
@@ -966,8 +979,12 @@ mod tests {
         assert_eq!(s(merged.get("folder")), "pics");
     }
 
+    /// 空路径的含义按动作分开：列目录/删除看的是远程根，上传落在配好的目录。
+    ///
+    /// 合成一条「空就回退到上传目录」的规则时，文件页顶部写着远程根、列出的却是
+    /// 上传目录那一层，用户看到的位置和实际内容对不上。
     #[test]
-    fn a_plan_prefers_the_path_it_was_given() {
+    fn an_empty_path_means_the_remote_root_when_browsing() {
         let plan = Plan {
             base: "https://x".into(),
             token: "t".into(),
@@ -975,8 +992,13 @@ mod tests {
             storage: zone(),
             dedup: true,
         };
-        assert_eq!(plan.dir(""), "upload");
-        assert_eq!(plan.dir("/pics/2026/"), "pics/2026");
+        assert_eq!(plan.browse_dir(""), "");
+        assert_eq!(plan.browse_dir("/"), "");
+        assert_eq!(plan.browse_dir("/pics/2026/"), "pics/2026");
+        // 上传仍然落在配好的目录：选文件时界面不传路径，用户不该被迫先切目录。
+        assert_eq!(plan.upload_dir(""), "upload");
+        assert_eq!(plan.upload_dir("/"), "upload");
+        assert_eq!(plan.upload_dir("/pics/2026/"), "pics/2026");
     }
 
     fn zone() -> String {
