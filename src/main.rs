@@ -1852,12 +1852,12 @@ mod tests {
             !caps.iter().any(|c| c == "remote_types"),
             "remote_types 不是能力，宿主会拒绝整份配置"
         );
-        // 0.3.0 从未发布，而 remote_types 的 marker/ops 与 remote.* 动作只有本轮宿主才有：
-        // 门槛写 0.3.0 会让一个仍标着 0.3.0 的旧构建把包装进来，再在第一次列目录时失败。
+        // 门槛是 0.3.2：面板分页与 remote.* 从 0.3.1 起就有，但 0.3.1 的宿主在用户打字时
+        // 不会重新问插件要状态，这一版插件靠「表单优先」才能不再死锁——装在 0.3.1 上仍是灰按钮。
         assert_eq!(
             cfg.get("min_gui_version").and_then(Value::as_str),
-            Some("0.3.1"),
-            "面板分页与 remote.* 从 0.3.1 起支持"
+            Some("0.3.2"),
+            "打字时刷新面板状态从 0.3.2 起才有"
         );
         let kind = cfg
             .get("remote_types")
