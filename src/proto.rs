@@ -9,6 +9,10 @@ use serde_json::{json, Map, Value};
 
 pub struct Rq {
     pub form: Value,
+    /// 宿主整份参数。面板动作用 `form`，宿主按操作协议发来的参数
+    /// （`remote`/`path`/`items`/`file_name`/`file_key`/`legacy`…）落在这一层的顶上，
+    /// 因为它们不属于面板表单，混进 `form` 会让面板看起来像用户填了这些东西。
+    pub args: Value,
     pub provided: Value,
     pub state: Value,
 }
@@ -78,6 +82,16 @@ pub fn state_s(state: &Value, key: &str) -> String {
 
 pub fn fstr(form: &Value, key: &str) -> String {
     s(form.get(key)).trim().to_string()
+}
+
+/// 宿主这次操作带来的参数（顶层的那些，不在 `form` 里）。
+pub fn arg(rq: &Rq, key: &str) -> String {
+    s(rq.args.get(key)).trim().to_string()
+}
+
+/// 同 [`arg`]，按真假值读。宿主发来的是 JSON 的 bool，正文里写 `"true"` 也要认。
+pub fn arg_flag(rq: &Rq, key: &str) -> bool {
+    crate::migrate::truthy(rq.args.get(key))
 }
 
 /// 本次要用的 kv。

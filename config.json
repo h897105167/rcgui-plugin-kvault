@@ -4,11 +4,11 @@
     "zh": "K-Vault 远程",
     "en": "K-Vault remote"
   },
-  "version": "0.1.0",
+  "version": "0.3.0",
   "entry": "main.wasm",
   "description": {
-    "zh": "连一个 K-Vault 站点，测通后建一个 webdav 类型的 rclone 远程，带 kvault 参数。上传仍由主程序负责。",
-    "en": "Connect to a K-Vault site, test it, then create a webdav rclone remote carrying the kvault parameters. Uploading stays in the main app."
+    "zh": "连一个 K-Vault 站点，建 webdav 远程，并在插件里列目录、删文件、上传。站点地址与接口都在这边，主程序只负责把用户选中的那个文件流出去。",
+    "en": "Connect to a K-Vault site, create the webdav remote, then list, delete and upload from the plugin. The site address and API live here; the main app only streams the file the user picked."
   },
   "author": {
     "zh": "RCGUI"
@@ -18,7 +18,7 @@
     "en": ["k-vault", "webdav", "remote", "image host"]
   },
   "capabilities": ["kv", "ui", "http", "rclone"],
-  "min_gui_version": "0.3.0",
+  "min_gui_version": "0.3.1",
   "platform": "any",
   "remote_types": [
     {
@@ -28,6 +28,8 @@
         "en": "K-Vault"
       },
       "base_type": "webdav",
+      "marker": "kvault",
+      "ops": ["remote.list", "remote.upload", "remote.delete"],
       "defaults": {
         "vendor": "other",
         "kvault": "1",
@@ -36,6 +38,7 @@
       }
     }
   ],
+  "adopt_legacy": ["kvault", "kvault_tokens"],
   "plugin_setting": {
     "version": 2,
     "summary": {
@@ -55,6 +58,20 @@
         "label": {
           "zh": "远程",
           "en": "Remote"
+        }
+      },
+      {
+        "id": "data",
+        "label": {
+          "zh": "旧设置与备份",
+          "en": "Old settings & backup"
+        }
+      },
+      {
+        "id": "files",
+        "label": {
+          "zh": "站点上的文件",
+          "en": "Site files"
         }
       },
       {
@@ -285,6 +302,254 @@
       },
       {
         "kind": "group",
+        "key": "g_data",
+        "label": {
+          "zh": "从旧版主程序搬设置",
+          "en": "Bring settings over from the old app"
+        },
+        "page": "data"
+      },
+      {
+        "kind": "action",
+        "key": "migrate",
+        "label": {
+          "zh": "扫描旧设置",
+          "en": "Scan old settings"
+        },
+        "style": "primary",
+        "line": "data-scan",
+        "page": "data"
+      },
+      {
+        "kind": "hint",
+        "key": "hint_migrate",
+        "label": {
+          "zh": "迁移不会改动 rclone 配置",
+          "en": "Migrating leaves rclone's config alone"
+        },
+        "text": {
+          "zh": "扫的是 rclone 里带 kvault 标记的配置，做法是读出来记一份清单。一个字节都不写回 rclone，所以旧版主程序随时能接着用那些远程。清单里只有站点地址、目录、存储这些参数，令牌留在原来的地方。",
+          "en": "The scan reads the remotes in rclone that carry the kvault marker and records an inventory. It writes nothing back to rclone, so the old app can keep using those remotes. The inventory holds the address, folder and storage parameters; tokens stay where they were."
+        },
+        "page": "data"
+      },
+      {
+        "kind": "field",
+        "key": "pick",
+        "label": {
+          "zh": "记录名",
+          "en": "Record"
+        },
+        "field": "text",
+        "page": "data"
+      },
+      {
+        "kind": "action",
+        "key": "adopt",
+        "label": {
+          "zh": "用这条填表单",
+          "en": "Fill the form with it"
+        },
+        "line": "data-pick",
+        "page": "data"
+      },
+      {
+        "kind": "group",
+        "key": "g_backup",
+        "label": {
+          "zh": "备份与恢复",
+          "en": "Backup and restore"
+        },
+        "page": "data"
+      },
+      {
+        "kind": "field",
+        "key": "with_token",
+        "label": {
+          "zh": "导出时带上令牌（文件里会是明文密码，别外传）",
+          "en": "Include tokens in the export (plaintext secrets — do not share it)"
+        },
+        "field": "bool",
+        "default": "false",
+        "page": "data"
+      },
+      {
+        "kind": "action",
+        "key": "export",
+        "label": {
+          "zh": "导出",
+          "en": "Export"
+        },
+        "line": "data-export",
+        "page": "data"
+      },
+      {
+        "kind": "field",
+        "key": "dump",
+        "label": {
+          "zh": "导出内容（恢复时也可以把内容粘到这里）",
+          "en": "Export text (or paste something here to restore)"
+        },
+        "field": "multiline",
+        "page": "data"
+      },
+      {
+        "kind": "action",
+        "key": "restore",
+        "label": {
+          "zh": "恢复",
+          "en": "Restore"
+        },
+        "line": "data-restore",
+        "page": "data"
+      },
+      {
+        "kind": "hint",
+        "key": "hint_data",
+        "label": {
+          "zh": "卸载前先导出一份",
+          "en": "Export before uninstalling"
+        },
+        "text": {
+          "zh": "插件的设置存在插件自己的目录里，卸载插件时会被一起删掉——所以卸载前先点「导出」。恢复不会覆盖你正在用的站点设置：只有原来是空的时候才填，清单则按条目合并。",
+          "en": "The plugin's settings live in its own directory and are deleted when the plugin is uninstalled, so export before removing it. Restoring never overwrites the site settings you are using: it only fills them when they are empty, and merges the inventory record by record."
+        },
+        "page": "data"
+      },
+      {
+        "kind": "group",
+        "key": "g_files",
+        "label": {
+          "zh": "站点上的文件",
+          "en": "Files on the site"
+        },
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "remote",
+        "label": {
+          "zh": "记录名（留空＝上面的站点）",
+          "en": "Record name (empty = the site above)"
+        },
+        "field": "text",
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "path",
+        "label": {
+          "zh": "目录（留空＝记下的那个）",
+          "en": "Folder (empty = the recorded one)"
+        },
+        "field": "text",
+        "page": "files"
+      },
+      {
+        "kind": "action",
+        "key": "list",
+        "label": {
+          "zh": "列文件",
+          "en": "List files"
+        },
+        "line": "files-one",
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "listing",
+        "label": {
+          "zh": "列表（每行：路径 大小 id）",
+          "en": "Listing (path, size, id per line)"
+        },
+        "field": "multiline",
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "id",
+        "label": {
+          "zh": "要删的文件 id",
+          "en": "File id to delete"
+        },
+        "field": "text",
+        "page": "files"
+      },
+      {
+        "kind": "action",
+        "key": "remove",
+        "label": {
+          "zh": "删除",
+          "en": "Delete"
+        },
+        "line": "files-two",
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "file",
+        "label": {
+          "zh": "要上传的文件",
+          "en": "File to upload"
+        },
+        "field": "path",
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "link",
+        "label": {
+          "zh": "上次上传的链接",
+          "en": "Link of the last upload"
+        },
+        "field": "text",
+        "page": "files"
+      },
+      {
+        "kind": "action",
+        "key": "upload",
+        "label": {
+          "zh": "上传",
+          "en": "Upload"
+        },
+        "line": "files-three",
+        "page": "files"
+      },
+      {
+        "kind": "action",
+        "key": "plan",
+        "label": {
+          "zh": "只看要发什么请求",
+          "en": "Show the requests only"
+        },
+        "line": "files-four",
+        "page": "files"
+      },
+      {
+        "kind": "field",
+        "key": "trace",
+        "label": {
+          "zh": "请求说明（令牌只露前几位）",
+          "en": "Request plan (token masked)"
+        },
+        "field": "multiline",
+        "page": "files"
+      },
+      {
+        "kind": "hint",
+        "key": "hint_files",
+        "label": {
+          "zh": "谁做什么",
+          "en": "Who does what"
+        },
+        "text": {
+          "zh": "地址、认证头、表单字段、怎么解析回复、怎么认错误，全在这个插件里。主程序只按这里的说明发请求；上传时它只读你这次在「要上传的文件」里挑的那一个，别的路径它不认，也删不掉。",
+          "en": "The address, the auth header, the form fields and how replies and errors are read all live in this plugin. The main program only carries out what it is told here, and on upload it reads just the one file you picked in the file field — no other path is accepted or can be deleted."
+        },
+        "page": "files"
+      },
+      {
+        "kind": "group",
         "key": "g_about",
         "label": {
           "zh": "关于这个插件",
@@ -317,12 +582,12 @@
         "kind": "hint",
         "key": "hint_upload",
         "label": {
-          "zh": "上传由主程序负责",
-          "en": "Uploads are the main app's job"
+          "zh": "只有字节这一步交给主程序",
+          "en": "Only the bytes are handed to the main app"
         },
         "text": {
-          "zh": "上传不能放进插件：站点的上传接口要发文件，插件只能发文本请求。所以上传、列表、删除仍在主程序里——远程建好后，主程序按 kvault 参数走站点自己的接口。插件只负责地址、令牌和远程参数这三件事。",
-          "en": "Uploading cannot live in a plugin: the site's upload endpoint needs a file body, and a plugin can only send text requests. Upload, listing and delete therefore stay in the main app, which reads the kvault parameters from the remote. This plugin only handles the address, the token and the remote parameters."
+          "zh": "插件发不出文件：它能发的请求只有文本正文，大文件没法从插件里出去。所以「站点上的文件」这一页把地址、认证头、表单字段、回复解析、错误识别全算在插件里，唯独读文件字节这一步交给主程序——它只读你挑的那一个文件，按插件给的说明拼成 multipart 发出去。",
+          "en": "A plugin cannot send a file: the requests it can make carry a text body, so large files cannot leave from inside a plugin. The site files page therefore keeps the address, the auth header, the form fields, reply parsing and error reading in the plugin, and hands over only the step that reads the bytes: the main app reads the single file you picked and builds the multipart request the plugin describes."
         },
         "page": "about"
       }

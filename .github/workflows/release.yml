@@ -31,6 +31,10 @@ jobs:
 
       # 版本号有四份副本（tag、config.json、Cargo.toml、Cargo.lock），
       # 任何一份对不上，装上去的包名、界面显示的版本、Release 标题就会互相矛盾。
+      #
+      # Cargo.lock 的键是 crate 名，不是插件 id：插件 id 是 "kvault"，包名是
+      # "rcgui-plugin-kvault"。拿插件 id 去查锁永远是 None，发布会被自己挡住（run 45887585097
+      # 就是这么红的），所以这里用 Cargo.toml 的 package.name 查。
       - name: 校验版本一致
         env:
           TAG: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
@@ -43,20 +47,31 @@ jobs:
           pid, ver = cfg["id"], cfg["version"]
           errors = []
 
-          cargo_ver = tomllib.load(open("Cargo.toml", "rb"))["package"]["version"]
+          cargo = tomllib.load(open("Cargo.toml", "rb"))["package"]
+          crate, cargo_ver = cargo["name"], cargo["version"]
           if cargo_ver != ver:
               errors.append(f"Cargo.toml 的 version 是 {cargo_ver}，config.json 是 {ver}")
 
+          # 同一个 crate 名在锁里可以出现多份（workspace 里不同依赖要不同版本），
+          # 所以按名字收集全部版本再比；用 dict 逐个赋值只会留下最后一个，漏掉冲突。
           lock = tomllib.load(open("Cargo.lock", "rb"))
-          locked = {p["name"]: p["version"] for p in lock.get("package", [])}
-          if locked.get(pid) != ver:
-              errors.append(f"Cargo.lock 里 {pid} 是 {locked.get(pid)}，config.json 是 {ver}")
+          locked = {}
+          for p in lock.get("package", []):
+              locked.setdefault(p["name"], []).append(p["version"])
+          versions = locked.get(crate, [])
+          if not versions:
+              errors.append(
+                  f"Cargo.lock 里找不到 crate {crate}（取自 Cargo.toml 的 package.name）。"
+                  f"插件 id 是 {pid}，它不会出现在锁文件里；请确认锁文件是当前 Cargo.toml 生成的。"
+              )
+          elif versions != [ver]:
+              errors.append(f"Cargo.lock 里 {crate} 是 {', '.join(versions)}，config.json 是 {ver}")
 
           tag = os.environ.get("TAG", "").lstrip("v")
           if tag and tag != ver:
               errors.append(f"tag 是 v{tag}，config.json 是 {ver}：请先改版本再打 tag")
 
-          print(f"id={pid} version={ver} tag={os.environ.get('TAG') or '(手动触发，无 tag)'}")
+          print(f"id={pid} crate={crate} version={ver} tag={os.environ.get('TAG') or '(手动触发，无 tag)'}")
           for e in errors:
               print("error: " + e, file=sys.stderr)
           sys.exit(1 if errors else 0)
@@ -87,6 +102,11 @@ jobs:
           set -euo pipefail
           id=$(python3 -c 'import json;print(json.load(open("config.json"))["id"])')
           ver=$(python3 -c 'import json;print(json.load(open("config.json"))["version"])')
+          # 正文里凡是清单已有的值都从清单读：入口文件名、宿主版本门槛、权限组。
+          # 写死一份副本，清单改了正文就成了假的，而没人会回头改这里。
+          entry=$(python3 -c 'import json;print(json.load(open("config.json")).get("entry") or "main.wasm")')
+          min_gui=$(python3 -c 'import json;print(json.load(open("config.json")).get("min_gui_version") or "0.0.0")')
+          caps=$(python3 -c 'import json;print("、".join(json.load(open("config.json")).get("capabilities") or []))')
           zip="dist/$id-$ver.zip"
           sha=$(sha256sum "$zip" | cut -d' ' -f1)
           echo "sha256=$sha" >> "$GITHUB_ENV"
@@ -96,9 +116,9 @@ jobs:
             echo ""
             echo "- zip: \`$id-$ver.zip\`"
             echo "- sha256: \`$sha\`"
-            echo "- 包内 \`check.sha256\` 另含 config.json 与 main.wasm 各自的 sha256。"
-            echo "- 需要宿主 0.3.0 或更高：\`remote_types\` 与面板分页都从这个版本起才有。"
-            echo "- 权限：kv、ui、http、rclone。\`remote_types\` 是插件元数据，不占能力组。"
+            echo "- 包内 \`check.sha256\` 另含 config.json 与 $entry 各自的 sha256。"
+            echo "- 需要宿主 $min_gui 或更高：这个包用到的 \`remote_types\` 与面板分页都从那一版起才有。"
+            echo "- 权限：$caps。\`remote_types\` 是插件元数据，不占能力组。"
             echo "- 上传仍由宿主内核完成（插件只负责建远程与测试连通），所以旧版核心的 \`__kvault\` 令牌存储继续可用。"
           } > notes.md
 
