@@ -44,6 +44,18 @@ struct Site {
     dedup: bool,
 }
 
+/// 空串换成默认值。
+///
+/// 只给面板刷新用：`name`、`storage` 这类字段在 config.json 里声明了默认值，用户清空
+/// 输入框后必须立刻回到默认值显示，不能留着空串让人以为没生效。
+fn or_default(text: String, fallback: &str) -> String {
+    if text.is_empty() {
+        fallback.to_string()
+    } else {
+        text
+    }
+}
+
 impl Site {
     /// 从 kv 读回站点信息。缺字段就用默认值，不报错——第一次打开面板时 kv 是空的。
     fn of(kv: &Value) -> Site {
@@ -117,6 +129,38 @@ impl Site {
                 self.dedup = v == "true" || v == "1" || v == "on";
             }
             _ => {}
+        }
+        self
+    }
+
+    /// 刷新面板用：表单里**出现过的**字段一律按表单算，写空也算。
+    ///
+    /// 和 [`Site::with_form`] 只差空值怎么处理，两边都不能改：动作（测试、建远程）
+    /// 遇到空串要回落到已保存的值，不然用户没重新敲密码就永远测不过；而刷新面板要
+    /// 如实反映界面上写着什么，用户把地址删光了，就不能还报「已就绪」、还把
+    /// 「测试连接」留着能点。
+    fn preview(mut self, form: &Value) -> Site {
+        let Some(map) = form.as_object() else {
+            return self;
+        };
+        if map.contains_key("base") {
+            self.base = site::base_of(&fstr(form, "base"));
+        }
+        if map.contains_key("token") {
+            self.token = fstr(form, "token");
+        }
+        if map.contains_key("folder") {
+            self.folder = fstr(form, "folder");
+        }
+        if map.contains_key("name") {
+            self.name = or_default(fstr(form, "name"), DEFAULT_NAME);
+        }
+        if map.contains_key("storage") {
+            self.storage = or_default(fstr(form, "storage"), site::DEFAULT_STORAGE);
+        }
+        if let Some(flag) = map.get("dedup") {
+            // 出现了就按表单算：勾掉就是 false，不能因为值是空串就退回已保存的 true
+            self.dedup = migrate::truthy(Some(flag));
         }
         self
     }
@@ -298,6 +342,10 @@ fn ready_status(site: &Site) -> (String, &'static str) {
 }
 
 /// 只读刷新：不写 kv，也不发任何请求。
+///
+/// 必须叠上表单：用户在输入框里敲的地址和令牌只存在于宿主的表单里，kv 里还是上一次
+/// 保存的值。只看 kv 的话，新用户填完永远是「先填站点地址」，测试按钮也永远点不动，
+/// 而按钮又点不动就永远没机会保存——死锁。
 fn on_state(id: u64, rq: &Rq) -> Value {
     match state_s(&rq.state, "step").as_str() {
         "" => need(
@@ -306,7 +354,7 @@ fn on_state(id: u64, rq: &Rq) -> Value {
             vec![need_item("kv.get_all", "kv", json!({}))],
         ),
         _ => {
-            let site = Site::of(&kv_pick(rq));
+            let site = Site::of(&kv_pick(rq)).preview(&rq.form);
             let (status, lamp) = ready_status(&site);
             done(id, panel(&site, status, lamp))
         }
@@ -360,7 +408,9 @@ fn on_test(id: u64, rq: &Rq) -> Value {
             need(id, state, list)
         }
         _ => {
-            let site = Site::of(&kv_pick(rq));
+            // 和上一轮一样叠表单：这一轮要落盘的就是用户测的那份站点信息。只看 kv
+            // 会把用户刚敲的地址令牌丢掉——测通了反而写回旧值，面板再一合表单就退回旧值。
+            let site = Site::of(&kv_pick(rq)).with_form(&rq.form);
             if let Some(e) = got_err(&rq.provided, "health") {
                 return fail(id, &f(&t("site.health_fail"), &[&e]));
             }
@@ -614,7 +664,8 @@ fn on_copy_dav(id: u64, rq: &Rq) -> Value {
             if let Some(e) = got_err(&rq.provided, "copied") {
                 return fail(id, &f(&t("copy.fail"), &[&e]));
             }
-            let site = Site::of(&kv_pick(rq));
+            // 面板只是回显：按用户此刻填的地址说。读 kv 会拿旧值覆盖掉刚敲的地址。
+            let site = Site::of(&kv_pick(rq)).preview(&rq.form);
             let status = f(&t("copy.what"), &[&site::dav_url(&site.base)]);
             let mut body = panel(&site, status.clone(), "ok");
             body["toast"] = json!({ "level": "ok", "message": truncate(&status, 200) });
@@ -1020,7 +1071,12 @@ fn on_export(id: u64, rq: &Rq) -> Value {
                 None => t("data.export_plain"),
             };
             let lamp = if failed.is_some() { "warn" } else { "ok" };
-            let mut body = panel(&Site::of(&kv_pick(rq)), status.clone(), lamp);
+            // 回显同上：值取用户此刻的表单。导出文件里装的仍是已保存的那份站点。
+            let mut body = panel(
+                &Site::of(&kv_pick(rq)).preview(&rq.form),
+                status.clone(),
+                lamp,
+            );
             body["values"]["dump"] = json!(text);
             body["toast"] = json!({ "level": lamp, "message": truncate(&status, 200) });
             done(id, body)
@@ -2379,5 +2435,148 @@ mod tests {
         );
         assert!(!trace.contains("tok-123"), "令牌只能露前几位：\n{trace}");
         assert!(trace.contains("tok-"), "还得让人能对上号：\n{trace}");
+    }
+
+    /// 用户刚敲完地址和令牌，面板就得说「能测了」。
+    ///
+    /// 这是最容易复发的地方：`state` 只读 kv 里存的那一份站点，而用户在输入框
+    /// 里敲的字宿主叫它「表单」，还没写进 kv。两边不同步，新用户填完也永远看到
+    /// 「先填站点地址」、测试连接永远点不动；而点不动就永远没机会保存，转不出去。
+    #[test]
+    fn the_panel_goes_ready_as_soon_as_the_form_has_a_site() {
+        let mut host = Host::new();
+
+        let (out, _) = drive(&mut host, "state", &filled());
+
+        let body = body_of(&out);
+        assert_eq!(s(body.get("lamp")), "ok", "填全了就该是就绪");
+        assert_eq!(
+            body["enabled"].get("test"),
+            Some(&json!(true)),
+            "有地址就能测连接"
+        );
+        assert_eq!(body["enabled"].get("create"), Some(&json!(true)));
+        assert_eq!(body["enabled"].get("copy_dav"), Some(&json!(true)));
+        assert!(
+            !s(body.get("status")).contains("先填站点地址"),
+            "状态行还停在旧结论：{}",
+            s(body.get("status"))
+        );
+        assert!(
+            ops_of(&out).is_empty(),
+            "刷新不该写任何东西：写下去等于把用户没敲完的字当成定稿"
+        );
+    }
+
+    /// 只填了地址、还没填令牌：能测连接，建远程要等令牌。
+    #[test]
+    fn the_panel_lets_the_address_be_tested_before_a_token_is_typed() {
+        let mut host = Host::new();
+
+        let (out, _) = drive(
+            &mut host,
+            "state",
+            &json!({ "base": "https://vault.example.com" }),
+        );
+
+        let body = body_of(&out);
+        assert_eq!(body["enabled"].get("test"), Some(&json!(true)));
+        assert_eq!(
+            body["enabled"].get("create"),
+            Some(&json!(false)),
+            "没令牌建不了远程"
+        );
+        assert_eq!(s(body.get("lamp")), "warn", "还差一项，不能报就绪");
+    }
+
+    /// 把地址删空：面板要退回「等你填」，不能还挂着上次的「就绪」。
+    ///
+    /// 表单里出现这个键就说明用户此刻看到的是空框——空着就是空着，不能拿 kv 里
+    /// 存着的旧地址顶上，否则面板显示正常、点下去必然失败。
+    #[test]
+    fn clearing_the_address_puts_the_panel_back_to_waiting() {
+        let mut host = Host::new();
+        host.kv = json!({
+            (KEY): {
+                "base": "https://vault.example.com",
+                "token": "tok-123",
+                "folder": "album",
+                "name": "my-vault",
+                "storage": "r2",
+                "dedup": true,
+            }
+        });
+
+        let (out, _) = drive(&mut host, "state", &json!({ "base": "" }));
+
+        let body = body_of(&out);
+        assert_eq!(s(body.get("lamp")), "warn");
+        assert_eq!(
+            body["enabled"].get("test"),
+            Some(&json!(false)),
+            "地址空了还能点测试，就是在骗用户"
+        );
+        assert_eq!(body["enabled"].get("create"), Some(&json!(false)));
+        assert_eq!(
+            s(body["values"].get("base")),
+            "",
+            "回显必须跟输入框一致，否则面板一合表单又把旧地址写回去"
+        );
+    }
+
+    /// 测通了要保存用户测的那一份站点，不是 kv 里的旧值。
+    ///
+    /// 保存错的话用户会看到极难理解的一幕：测试成功，但地址栏退回上次的值。
+    #[test]
+    fn a_passing_test_saves_the_address_the_user_typed() {
+        let mut host = Host::new();
+        host.replies
+            .push_back(json!({ "status": 200, "body": "{}" }));
+        host.replies.push_back(json!({
+            "status": 200,
+            "body": "{\"success\":true,\"data\":{\"token\":{\"id\":\"tok_1\",\"name\":\"我的令牌\"}}}",
+        }));
+
+        let (out, _) = drive(&mut host, "test", &filled());
+
+        let ops = ops_of(&out);
+        let saved = ops
+            .iter()
+            .find(|op| s(op.get("key")) == KEY)
+            .unwrap_or_else(|| panic!("测通了要把站点存下来：{ops:?}"));
+        assert_eq!(
+            s(saved.get("value").and_then(|v| v.get("base"))),
+            "https://vault.example.com",
+            "存的必须是用户刚敲的地址（末尾斜杠去掉），不是 kv 里的旧值"
+        );
+        assert_eq!(
+            s(saved.get("value").and_then(|v| v.get("token"))),
+            "tok-123"
+        );
+    }
+
+    /// 给人看的地方（状态行、提示条）不能出现令牌原文。
+    ///
+    /// 状态行会进日志、进截图、进用户回报的粘贴内容，令牌只能留在 kv 里。
+    #[test]
+    fn the_test_result_never_repeats_the_token() {
+        let mut host = Host::new();
+        host.replies
+            .push_back(json!({ "status": 200, "body": "{}" }));
+        host.replies.push_back(json!({
+            "status": 200,
+            "body": "{\"success\":true,\"data\":{\"token\":{\"id\":\"tok_1\",\"name\":\"我的令牌\"}}}",
+        }));
+
+        let (out, _) = drive(&mut host, "test", &filled());
+
+        let body = body_of(&out);
+        let mut shown = s(body.get("status"));
+        if let Some(toast) = body.get("toast") {
+            shown.push(' ');
+            shown.push_str(&toast.to_string());
+        }
+        assert!(!shown.contains("tok-123"), "状态行把令牌抄出来了：{shown}");
+        assert!(shown.contains("我的令牌"), "该说的是令牌的名字：{shown}");
     }
 }

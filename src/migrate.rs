@@ -153,6 +153,14 @@ pub fn imported_of(kv: &Value) -> Map<String, Value> {
         .unwrap_or_default()
 }
 
+/// 主程序借这个命名空间存了两格自己的东西：`form` 是面板上正在输入的表单，
+/// `_` 开头的是插件回的状态（`_state`）。它们不是远程名——`form` 里还带着用户
+/// 刚敲下的令牌，当成远程记录搬走就会凭空多出一条叫 `form` 的远程，导出时连
+/// 令牌一起写进文件。这两种格子一律不当作令牌副本。
+fn is_host_slot(name: &str) -> bool {
+    name == "form" || name.starts_with('_')
+}
+
 /// 旧版留下的明文令牌副本：`{"<远程名>": {"token": "…"}}`。
 ///
 /// `skip` 是插件自己那一格（整站信息），它不是远程名，不能当令牌记录搬走。
@@ -163,7 +171,7 @@ pub fn legacy_tokens(kv: &Value, skip: &str) -> Vec<(String, String)> {
     };
     let mut out: Vec<(String, String)> = Vec::new();
     for (name, value) in map {
-        if name == skip {
+        if name == skip || is_host_slot(name) {
             continue;
         }
         let token = value
@@ -499,10 +507,15 @@ mod tests {
     }
 
     /// 明文令牌副本里混着插件自己的 `site` 那一格和空令牌，都不能当远程记录搬走。
+    /// 主程序存的 `form` / `_state` 同样不能当成远程名。
     #[test]
     fn legacy_tokens_skip_the_site_slot_and_blanks() {
         let kv = json!({
             "site": {"base": "https://vault.example.com", "token": "SITE-TOKEN"},
+            // 用户在面板上刚敲进去的表单：里面有令牌，但它不是一条远程
+            "form": {"base": "https://vault.example.com/", "token": "TYPED-TOKEN"},
+            // 插件回的状态：长得像远程记录也不许搬
+            "_state": {"status": "已就绪", "token": "STATE-TOKEN"},
             "b-remote": {"token": "B-TOKEN"},
             "a-remote": {"token": "A-TOKEN"},
             "empty": {"token": "  "},
