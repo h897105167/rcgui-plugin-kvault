@@ -156,7 +156,7 @@ bash scripts/pack.sh                   # Linux / macOS / CI
 
 ## 在 GitHub 上构建
 
-`.github/workflows/ci.yml` 每次推送、每个 PR，以及每天 19:44 UTC 都会跑一遍：格式、wasm 目标编译、测试、`config.json` 与中英文案自检。依赖或 runner 镜像哪天变了，没人推代码也会在这里露出来。
+`.github/workflows/ci.yml` 每次推送、每个 PR，以及每天 19:31 UTC（北京时间 03:31）都会跑一遍：格式、wasm 目标编译、测试、`config.json` 与中英文案自检。依赖或 runner 镜像哪天变了，没人推代码也会在这里露出来。
 
 只要 zip、不想在本机装 Rust 与 wasm 目标：手动跑 **release**（`Actions` → `release` → `Run workflow`，选分支），产物是 artifact `plugin-package`，里面是 `dist/kvault-<版本>.zip`。手动跑不会建 Release —— 那一步只对 `v*` tag 生效；tag、`config.json`、`Cargo.toml`、`Cargo.lock` 四处版本对不上会先被拦住。
 
